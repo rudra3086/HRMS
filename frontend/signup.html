@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up - Dayflow HRMS</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="card" style="max-width: 600px; margin: 2rem auto;">
+            <div class="text-center mb-4">
+                <img src="./logos/dayflow.png" alt="Dayflow" style="height: 60px; width: auto; margin-bottom: 1rem;">
+                <h1 style="color: var(--primary-color); margin-bottom: 0.5rem;">Dayflow</h1>
+                <p style="color: var(--secondary-color);">Human Resource Management System</p>
+                <h2 class="mt-3">Sign Up</h2>
+            </div>
+
+            <div id="alertContainer"></div>
+
+            <form id="signupForm">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="firstName">First Name</label>
+                        <input type="text" id="firstName" class="form-input" placeholder="John" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="lastName">Last Name</label>
+                        <input type="text" id="lastName" class="form-input" placeholder="Doe" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="email">Email Address</label>
+                    <input type="email" id="email" class="form-input" placeholder="your.email@company.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" id="password" class="form-input" placeholder="Create a strong password" required>
+                    <small style="color: var(--secondary-color);">
+                        At least 8 characters with uppercase, lowercase, number & special character
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" class="form-input" placeholder="Re-enter password" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="department">Department</label>
+                        <select id="department" class="form-select">
+                            <option value="IT">IT</option>
+                            <option value="HR">HR</option>
+                            <option value="Finance">Finance</option>
+                            <option value="Marketing">Marketing</option>
+                            <option value="Sales">Sales</option>
+                            <option value="Operations">Operations</option>
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="designation">Designation</label>
+                        <input type="text" id="designation" class="form-input" placeholder="Software Engineer">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="role">Role</label>
+                    <select id="role" class="form-select">
+                        <option value="employee">Employee</option>
+                        <option value="hr">HR Officer</option>
+                        <option value="admin" id="adminOption">Admin</option>
+                    </select>
+                    <small style="color: var(--secondary-color);">Note: Only one admin can be created in the system</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-full">Sign Up</button>
+            </form>
+
+            <div class="text-center mt-3">
+                <p style="color: var(--secondary-color);">
+                    Already have an account? 
+                    <a href="./login.html" style="color: var(--primary-color); text-decoration: none; font-weight: 500;">Sign In</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+    <script>
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = {
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                department: document.getElementById('department').value,
+                designation: document.getElementById('designation').value,
+                role: document.getElementById('role').value
+            };
+
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const alertContainer = document.getElementById('alertContainer');
+
+            // Clear previous alerts
+            alertContainer.innerHTML = '';
+
+            // Validation
+            if (!validate.required(formData.firstName) || !validate.required(formData.lastName)) {
+                alertContainer.innerHTML = '<div class="alert alert-error">First name and last name are required</div>';
+                return;
+            }
+
+            if (!validate.email(formData.email)) {
+                alertContainer.innerHTML = '<div class="alert alert-error">Please enter a valid email address</div>';
+                return;
+            }
+
+            if (!validate.password(formData.password)) {
+                alertContainer.innerHTML = '<div class="alert alert-error">Password must be at least 8 characters with uppercase, lowercase, number and special character</div>';
+                return;
+            }
+
+            if (formData.password !== confirmPassword) {
+                alertContainer.innerHTML = '<div class="alert alert-error">Passwords do not match</div>';
+                return;
+            }
+
+            try {
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Creating Account...';
+
+                const response = await api.post('/auth/signup', formData);
+
+                if (response.success) {
+                    alertContainer.innerHTML = '<div class="alert alert-success">Account created successfully! Redirecting to login...</div>';
+                    
+                    setTimeout(() => {
+                        window.location.href = './login.html';
+                    }, 2000);
+                } else {
+                    throw new Error(response.message || 'Signup failed');
+                }
+            } catch (error) {
+                alertContainer.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sign Up';
+            }
+        });
+    </script>
+</body>
+</html>

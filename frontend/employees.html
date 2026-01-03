@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employees - Dayflow HRMS</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="navbar"></div>
+
+    <div class="container">
+        <div class="flex-between mb-3">
+            <h1>Employee Directory</h1>
+            <button class="btn btn-primary" onclick="window.location.href='/signup.html'">Add New Employee</button>
+        </div>
+
+        <!-- Filters -->
+        <div class="card">
+            <h2 class="card-header">Filters</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div class="form-group">
+                    <label class="form-label">Department</label>
+                    <select id="departmentFilter" class="form-select" onchange="loadEmployees()">
+                        <option value="">All Departments</option>
+                        <option value="IT">IT</option>
+                        <option value="HR">HR</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Sales">Sales</option>
+                        <option value="Operations">Operations</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select id="statusFilter" class="form-select" onchange="loadEmployees()">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="terminated">Terminated</option>
+                        <option value="">All Status</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Search</label>
+                    <input type="text" id="searchInput" class="form-input" placeholder="Search by name or ID..." onkeyup="searchEmployees()">
+                </div>
+            </div>
+        </div>
+
+        <!-- Employee List -->
+        <div class="card">
+            <h2 class="card-header">All Employees (<span id="employeeCount">0</span>)</h2>
+            <div id="employeeList">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+    <script>
+        let allEmployees = [];
+
+        async function loadEmployees() {
+            try {
+                const response = await api.get('/employees');
+                const container = document.getElementById('employeeList');
+
+                if (response.success && response.data.length > 0) {
+                    allEmployees = response.data;
+                    displayEmployees(allEmployees);
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No employees found.</p>';
+                }
+            } catch (error) {
+                console.error('Load employees error:', error);
+                ui.showError('Failed to load employees');
+            }
+        }
+
+        function displayEmployees(employees) {
+            const container = document.getElementById('employeeList');
+            const departmentFilter = document.getElementById('departmentFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            // Apply filters
+            let filtered = employees;
+            
+            if (departmentFilter) {
+                filtered = filtered.filter(emp => emp.department === departmentFilter);
+            }
+
+            if (statusFilter) {
+                filtered = filtered.filter(emp => emp.employment_status === statusFilter);
+            }
+
+            document.getElementById('employeeCount').textContent = filtered.length;
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<p style="color: var(--secondary-color);">No employees match the selected filters.</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Employee ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Department</th>
+                                <th>Designation</th>
+                                <th>Phone</th>
+                                <th>Joining Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="employeeTableBody">
+                            ${filtered.map(emp => `
+                                <tr>
+                                    <td><strong>${emp.employee_id}</strong></td>
+                                    <td>${emp.first_name} ${emp.last_name}</td>
+                                    <td>${emp.email}</td>
+                                    <td>${emp.department || '-'}</td>
+                                    <td>${emp.designation || '-'}</td>
+                                    <td>${emp.phone || '-'}</td>
+                                    <td>${ui.formatDate(emp.date_of_joining)}</td>
+                                    <td><span class="badge ${ui.getBadgeClass(emp.employment_status)}">${emp.employment_status.toUpperCase()}</span></td>
+                                    <td>
+                                        <button class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;" onclick="window.location.href='/profile.html?id=${emp.id}'">View</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function searchEmployees() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (!searchTerm) {
+                displayEmployees(allEmployees);
+                return;
+            }
+
+            const filtered = allEmployees.filter(emp => 
+                emp.employee_id.toLowerCase().includes(searchTerm) ||
+                emp.first_name.toLowerCase().includes(searchTerm) ||
+                emp.last_name.toLowerCase().includes(searchTerm) ||
+                emp.email.toLowerCase().includes(searchTerm)
+            );
+
+            displayEmployees(filtered);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!auth.isAdmin()) {
+                ui.showError('Access denied. Admin privileges required.');
+                setTimeout(() => {
+                    window.location.href = '/employee-dashboard.html';
+                }, 2000);
+                return;
+            }
+            
+            loadEmployees();
+        });
+    </script>
+</body>
+</html>

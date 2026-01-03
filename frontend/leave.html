@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Management - Dayflow HRMS</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="navbar"></div>
+
+    <div class="container">
+        <h1 class="mb-3">Leave Management</h1>
+
+        <!-- Leave Balance -->
+        <div class="card">
+            <h2 class="card-header">Leave Balance</h2>
+            <div id="leaveBalance">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Apply for Leave -->
+        <div class="card" id="applyLeaveCard">
+            <h2 class="card-header">Apply for Leave</h2>
+            <form id="leaveForm">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">Leave Type</label>
+                        <select id="leaveType" class="form-select" required>
+                            <option value="paid">Paid Leave</option>
+                            <option value="sick">Sick Leave</option>
+                            <option value="casual">Casual Leave</option>
+                            <option value="unpaid">Unpaid Leave</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" id="startDate" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">End Date</label>
+                        <input type="date" id="endDate" class="form-input" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Reason</label>
+                    <textarea id="reason" class="form-textarea" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Submit Leave Request</button>
+            </form>
+        </div>
+
+        <!-- Leave Requests -->
+        <div class="card">
+            <div class="flex-between mb-3">
+                <h2 class="card-header">Leave Requests</h2>
+                <select id="statusFilter" class="form-select" style="width: auto;" onchange="loadLeaveRequests()">
+                    <option value="">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </div>
+            <div id="leaveRequests">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+    <script>
+        async function loadLeaveBalance() {
+            try {
+                const response = await api.get('/leave/balance');
+                const container = document.getElementById('leaveBalance');
+
+                if (response.success && response.data.length > 0) {
+                    container.innerHTML = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            ${response.data.map(balance => `
+                                <div style="text-align: center; padding: 1rem; background: var(--light-bg); border-radius: 8px;">
+                                    <div style="font-size: 2rem; font-weight: bold; color: var(--primary-color);">${balance.remaining_leaves}</div>
+                                    <div style="color: var(--secondary-color); margin-bottom: 0.5rem;">${balance.leave_type.toUpperCase()} LEAVE</div>
+                                    <div style="font-size: 0.875rem; color: var(--secondary-color);">
+                                        Used: ${balance.used_leaves} / Total: ${balance.total_leaves}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No leave balance information available.</p>';
+                }
+            } catch (error) {
+                console.error('Load leave balance error:', error);
+                document.getElementById('leaveBalance').innerHTML = '<p class="alert alert-error">Failed to load leave balance</p>';
+            }
+        }
+
+        async function loadLeaveRequests() {
+            try {
+                const status = document.getElementById('statusFilter').value;
+                const url = status ? `/leave?status=${status}` : '/leave';
+                
+                const response = await api.get(url);
+                const container = document.getElementById('leaveRequests');
+
+                if (response.success && response.data.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        ${auth.isAdmin() ? '<th>Employee</th>' : ''}
+                                        <th>Type</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Days</th>
+                                        <th>Reason</th>
+                                        <th>Status</th>
+                                        ${auth.isAdmin() ? '<th>Comments</th>' : ''}
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${response.data.map(leave => `
+                                        <tr>
+                                            ${auth.isAdmin() ? `<td>${leave.first_name} ${leave.last_name}</td>` : ''}
+                                            <td>${leave.leave_type.toUpperCase()}</td>
+                                            <td>${ui.formatDate(leave.start_date)}</td>
+                                            <td>${ui.formatDate(leave.end_date)}</td>
+                                            <td>${leave.total_days}</td>
+                                            <td>${leave.reason || '-'}</td>
+                                            <td><span class="badge ${ui.getBadgeClass(leave.status)}">${leave.status.toUpperCase()}</span></td>
+                                            ${auth.isAdmin() ? `<td>${leave.admin_comments || '-'}</td>` : ''}
+                                            <td>
+                                                ${leave.status === 'pending' && auth.isAdmin() ? 
+                                                    `<button class="btn btn-success" style="padding: 0.5rem 1rem; font-size: 0.875rem; margin-right: 0.5rem;" onclick="approveLeave(${leave.id})">Approve</button>
+                                                     <button class="btn btn-danger" style="padding: 0.5rem 1rem; font-size: 0.875rem;" onclick="rejectLeave(${leave.id})">Reject</button>` : 
+                                                    leave.status === 'pending' && !auth.isAdmin() ? 
+                                                    `<button class="btn btn-danger" onclick="cancelLeave(${leave.id})">Cancel</button>` : '-'}
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No leave requests found.</p>';
+                }
+            } catch (error) {
+                console.error('Load leave requests error:', error);
+                document.getElementById('leaveRequests').innerHTML = '<p class="alert alert-error">Failed to load leave requests</p>';
+            }
+        }
+
+        document.getElementById('leaveForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const leaveData = {
+                leaveType: document.getElementById('leaveType').value,
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
+                reason: document.getElementById('reason').value
+            };
+
+            try {
+                const response = await api.post('/leave/apply', leaveData);
+
+                if (response.success) {
+                    ui.showSuccess('Leave request submitted successfully');
+                    e.target.reset();
+                    loadLeaveRequests();
+                    loadLeaveBalance();
+                }
+            } catch (error) {
+                ui.showError(error.message);
+            }
+        });
+
+        async function cancelLeave(id) {
+            if (!confirm('Are you sure you want to cancel this leave request?')) return;
+
+            try {
+                const response = await api.delete(`/leave/${id}`);
+                if (response.success) {
+                    ui.showSuccess('Leave request cancelled');
+                    loadLeaveRequests();
+                }
+            } catch (error) {
+                ui.showError(error.message);
+            }
+        }
+
+        async function approveLeave(id) {
+            const comments = prompt('Add comments (optional):');
+            
+            try {
+                const response = await api.put(`/leave/${id}`, {
+                    status: 'approved',
+                    adminComments: comments || ''
+                });
+                if (response.success) {
+                    ui.showSuccess('Leave request approved successfully');
+                    loadLeaveRequests();
+                }
+            } catch (error) {
+                ui.showError(error.message);
+            }
+        }
+
+        async function rejectLeave(id) {
+            const comments = prompt('Reason for rejection:');
+            if (!comments) {
+                ui.showError('Please provide a reason for rejection');
+                return;
+            }
+            
+            try {
+                const response = await api.put(`/leave/${id}`, {
+                    status: 'rejected',
+                    adminComments: comments
+                });
+                if (response.success) {
+                    ui.showSuccess('Leave request rejected');
+                    loadLeaveRequests();
+                }
+            } catch (error) {
+                ui.showError(error.message);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!auth.isAdmin()) {
+                loadLeaveBalance();
+            } else {
+                document.getElementById('applyLeaveCard').remove();
+            }
+            
+            // Set min date to today
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('startDate').min = today;
+            document.getElementById('endDate').min = today;
+
+            loadLeaveRequests();
+        });
+
+        // Update end date min when start date changes
+        document.getElementById('startDate').addEventListener('change', (e) => {
+            document.getElementById('endDate').min = e.target.value;
+        });
+    </script>
+</body>
+</html>

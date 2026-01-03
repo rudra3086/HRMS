@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll - Dayflow HRMS</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="navbar"></div>
+
+    <div class="container">
+        <div class="flex-between mb-3">
+            <h1>Payroll Management</h1>
+            <div id="adminButtons" style="display: none;">
+                <button class="btn btn-primary" onclick="openManagePayrollModal()">➕ Manage Salary</button>
+                <button class="btn btn-success" onclick="openGenerateSlipModal()" style="margin-left: 0.5rem;">📄 Generate Salary Slip</button>
+            </div>
+        </div>
+
+        <!-- Employee View: Simple Payroll Display -->
+        <div class="card" id="employeePayrollCard" style="display: none;">
+            <h2 class="card-header">My Monthly Payroll</h2>
+            <div id="employeePayrollInfo">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Admin View: All Employees Payroll Table -->
+        <div class="card" id="adminPayrollCard" style="display: none;">
+            <h2 class="card-header">Employee Salaries</h2>
+            <div id="adminPayrollInfo">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Salary Slips -->
+        <div class="card">
+            <div class="flex-between mb-3">
+                <h2 class="card-header">Salary Slips</h2>
+            </div>
+            <div id="salarySlips">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Payroll Modal (Admin Only) -->
+    <div id="managePayrollModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeManagePayrollModal()">&times;</span>
+            <h2 class="modal-header">💰 Manage Employee Salary</h2>
+            <form id="managePayrollForm">
+                <div class="form-group">
+                    <label class="form-label" for="selectEmployee">Select Employee *</label>
+                    <select id="selectEmployee" class="form-select" required onchange="loadExistingPayroll()">
+                        <option value="">-- Select Employee --</option>
+                    </select>
+                </div>
+
+                <div id="payrollFormFields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label" for="basicSalary">Monthly Salary (Rs) *</label>
+                        <input type="number" id="basicSalary" class="form-input" placeholder="20000" required>
+                        <small style="color: var(--secondary-color);">Note: Rs 100 will be deducted per leave taken</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="effectiveFrom">Effective From *</label>
+                        <input type="date" id="effectiveFrom" class="form-input" required>
+                    </div>
+
+                    <input type="hidden" id="payrollId" value="">
+
+                    <div class="flex gap-2 mt-3">
+                        <button type="submit" class="btn btn-success btn-full">Save Salary</button>
+                        <button type="button" class="btn btn-secondary btn-full" onclick="closeManagePayrollModal()">Cancel</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Generate Salary Slip Modal -->
+    <div id="generateSlipModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeGenerateSlipModal()">&times;</span>
+            <h2 class="modal-header">📄 Generate Salary Slip</h2>
+            <form id="generateSlipForm">
+                <div class="form-group">
+                    <label class="form-label" for="slipEmployee">Select Employee *</label>
+                    <select id="slipEmployee" class="form-select" required>
+                        <option value="">-- Select Employee --</option>
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="slipMonth">Month *</label>
+                        <select id="slipMonth" class="form-select" required>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="slipYear">Year *</label>
+                        <input type="number" id="slipYear" class="form-input" min="2020" max="2100" required>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-success btn-full">Generate Slip</button>
+                    <button type="button" class="btn btn-secondary btn-full" onclick="closeGenerateSlipModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+    <script>
+        let allEmployees = [];
+        let currentPayrollId = null;
+
+        async function loadAllEmployees() {
+            try {
+                const response = await api.get('/employees');
+                if (response.success) {
+                    allEmployees = response.data;
+                    
+                    // Populate employee dropdowns
+                    const selectEmployee = document.getElementById('selectEmployee');
+                    const slipEmployee = document.getElementById('slipEmployee');
+                    
+                    allEmployees.forEach(emp => {
+                        const option1 = new Option(`${emp.first_name} ${emp.last_name} - ${emp.department || 'N/A'}`, emp.id);
+                        const option2 = new Option(`${emp.first_name} ${emp.last_name} - ${emp.department || 'N/A'}`, emp.id);
+                        selectEmployee.add(option1);
+                        slipEmployee.add(option2);
+                    });
+                }
+            } catch (error) {
+                console.error('Load employees error:', error);
+            }
+        }
+
+        // Admin: Load all employee salaries
+        async function loadAdminPayroll() {
+            try {
+                const response = await api.get('/payroll');
+                const container = document.getElementById('adminPayrollInfo');
+
+                if (response.success && response.data.length > 0) {
+                    // Create a map to get employee monthly summary
+                    const summaryPromises = response.data.map(async (payroll) => {
+                        try {
+                            const summaryResponse = await api.get(`/payroll/monthly-summary?employeeId=${payroll.employee_id}`);
+                            return summaryResponse.success ? summaryResponse.data : null;
+                        } catch (error) {
+                            return null;
+                        }
+                    });
+
+                    const summaries = await Promise.all(summaryPromises);
+                    
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Employee</th>
+                                        <th>Department</th>
+                                        <th>Salary/Month</th>
+                                        <th>Current Month Leaves</th>
+                                        <th>Net Payroll</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${response.data.map((payroll, idx) => {
+                                        const summary = summaries[idx];
+                                        const leaves = summary ? summary.leaves_taken : 0;
+                                        const netPayroll = summary ? summary.net_payroll : parseFloat(payroll.basic_salary);
+                                        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                        const currentMonth = summary ? monthNames[summary.current_month - 1] : '';
+                                        
+                                        return `
+                                        <tr>
+                                            <td><strong>${payroll.first_name} ${payroll.last_name}</strong><br><small style="color: var(--secondary-color);">${payroll.designation || 'N/A'}</small></td>
+                                            <td>${payroll.department || 'N/A'}</td>
+                                            <td style="font-weight: bold;">Rs ${parseFloat(payroll.basic_salary).toLocaleString()}/month</td>
+                                            <td>${leaves} ${leaves === 1 ? 'day' : 'days'}</td>
+                                            <td style="font-weight: bold; color: var(--success-color);">
+                                                Rs ${netPayroll.toLocaleString()}
+                                                <br><small style="color: var(--secondary-color); font-weight: normal;">${currentMonth} ${summary ? summary.current_year : ''}</small>
+                                                ${leaves > 0 ? `<br><small style="color: var(--danger-color); font-weight: normal;">(${payroll.basic_salary} - ${leaves}×100 = ${netPayroll})</small>` : ''}
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;" 
+                                                        onclick="editPayroll(${payroll.employee_id}, ${payroll.id})">Edit</button>
+                                            </td>
+                                        </tr>
+                                    `}).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No salary records found. Click "Manage Salary" to set employee salaries.</p>';
+                }
+            } catch (error) {
+                console.error('Load admin payroll error:', error);
+                document.getElementById('adminPayrollInfo').innerHTML = `<p class="alert alert-error">Failed to load payroll information</p>`;
+            }
+        }
+
+        // Employee: Load simple payroll view
+        async function loadEmployeePayroll() {
+            try {
+                const response = await api.get('/payroll/monthly-summary');
+                const container = document.getElementById('employeePayrollInfo');
+
+                if (response.success && response.data) {
+                    const data = response.data;
+                    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    
+                    container.innerHTML = `
+                        <div style="max-width: 600px; margin: 0 auto;">
+                            <div style="background: linear-gradient(135deg, var(--primary-color), #667eea); color: white; padding: 2rem; border-radius: 12px; text-align: center; margin-bottom: 2rem;">
+                                <div style="font-size: 0.875rem; opacity: 0.9; margin-bottom: 0.5rem;">
+                                    ${data.first_name} ${data.last_name} - ${data.designation || 'Employee'}
+                                </div>
+                                <div style="font-size: 3rem; font-weight: bold; margin: 1rem 0;">
+                                    Rs ${parseFloat(data.net_payroll).toLocaleString()}
+                                </div>
+                                <div style="font-size: 0.875rem; opacity: 0.9;">
+                                    Net Payroll for ${monthNames[data.current_month - 1]} ${data.current_year}
+                                </div>
+                            </div>
+
+                            <div style="background: var(--light-bg); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                                <h3 style="margin-bottom: 1rem; color: var(--primary-color);">💼 Salary Breakdown</h3>
+                                <table class="table" style="margin-bottom: 0;">
+                                    <tr>
+                                        <td>Monthly Salary</td>
+                                        <td style="text-align: right; font-weight: bold;">Rs ${parseFloat(data.basic_salary).toLocaleString()}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Leaves Taken (${monthNames[data.current_month - 1]})</td>
+                                        <td style="text-align: right; font-weight: bold; color: ${data.leaves_taken > 0 ? 'var(--warning-color)' : 'var(--success-color)'};">
+                                            ${data.leaves_taken} ${data.leaves_taken === 1 ? 'day' : 'days'}
+                                        </td>
+                                    </tr>
+                                    ${data.leaves_taken > 0 ? `
+                                    <tr style="color: var(--danger-color);">
+                                        <td>Leave Deduction (${data.leaves_taken} × Rs 100)</td>
+                                        <td style="text-align: right; font-weight: bold;">- Rs ${data.leave_deduction.toLocaleString()}</td>
+                                    </tr>
+                                    ` : ''}
+                                    <tr style="background: var(--primary-color); color: white; font-size: 1.125rem;">
+                                        <td><strong>Net Payroll</strong></td>
+                                        <td style="text-align: right; font-weight: bold;">Rs ${parseFloat(data.net_payroll).toLocaleString()}</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            ${data.leaves_taken > 0 ? `
+                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                                <strong>📊 Calculation:</strong><br>
+                                Net Payroll = Rs ${parseFloat(data.basic_salary).toLocaleString()} - (${data.leaves_taken} × Rs 100) = <strong>Rs ${parseFloat(data.net_payroll).toLocaleString()}</strong>
+                            </div>
+                            ` : ''}
+
+                            <div style="font-size: 0.875rem; color: var(--secondary-color); text-align: center;">
+                                <p>💡 Note: Rs 100 is deducted for each leave taken per month</p>
+                                <p style="margin-top: 0.5rem;">Salary effective from: ${ui.formatDate(data.effective_from)}</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color); text-align: center;">No payroll information available. Please contact HR/Admin.</p>';
+                }
+            } catch (error) {
+                console.error('Load employee payroll error:', error);
+                document.getElementById('employeePayrollInfo').innerHTML = '<p class="alert alert-error">Failed to load payroll information</p>';
+            }
+        }
+
+        async function editPayroll(employeeId, payrollId) {
+            document.getElementById('selectEmployee').value = employeeId;
+            await loadExistingPayroll();
+            openManagePayrollModal();
+        }
+
+        async function loadExistingPayroll() {
+            const employeeId = document.getElementById('selectEmployee').value;
+            if (!employeeId) {
+                document.getElementById('payrollFormFields').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('payrollFormFields').style.display = 'block';
+
+            try {
+                const response = await api.get(`/payroll?employeeId=${employeeId}`);
+                if (response.success && response.data.length > 0) {
+                    const payroll = response.data[0];
+                    currentPayrollId = payroll.id;
+                    
+                    document.getElementById('basicSalary').value = payroll.basic_salary;
+                    document.getElementById('effectiveFrom').value = payroll.effective_from.split('T')[0];
+                    document.getElementById('payrollId').value = payroll.id;
+                } else {
+                    // New payroll
+                    currentPayrollId = null;
+                    document.getElementById('managePayrollForm').reset();
+                    document.getElementById('selectEmployee').value = employeeId;
+                    document.getElementById('payrollFormFields').style.display = 'block';
+                    document.getElementById('effectiveFrom').value = new Date().toISOString().split('T')[0];
+                }
+            } catch (error) {
+                console.error('Load existing payroll error:', error);
+            }
+        }
+
+        function openManagePayrollModal() {
+            document.getElementById('managePayrollModal').classList.add('active');
+        }
+
+        function closeManagePayrollModal() {
+            document.getElementById('managePayrollModal').classList.remove('active');
+            document.getElementById('managePayrollForm').reset();
+            document.getElementById('payrollFormFields').style.display = 'none';
+            currentPayrollId = null;
+        }
+
+        function openGenerateSlipModal() {
+            document.getElementById('generateSlipModal').classList.add('active');
+            const now = new Date();
+            document.getElementById('slipMonth').value = now.getMonth() + 1;
+            document.getElementById('slipYear').value = now.getFullYear();
+        }
+
+        function closeGenerateSlipModal() {
+            document.getElementById('generateSlipModal').classList.remove('active');
+            document.getElementById('generateSlipForm').reset();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (auth.isAdmin()) {
+                // Admin view
+                document.getElementById('adminButtons').style.display = 'flex';
+                document.getElementById('adminPayrollCard').style.display = 'block';
+                await loadAllEmployees();
+                await loadAdminPayroll();
+            } else {
+                // Employee view
+                document.getElementById('employeePayrollCard').style.display = 'block';
+                await loadEmployeePayroll();
+            }
+
+            await loadSalarySlips();
+
+            // Manage Payroll Form
+            document.getElementById('managePayrollForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const employeeId = document.getElementById('selectEmployee').value;
+                const payrollData = {
+                    employeeId: parseInt(employeeId),
+                    basicSalary: parseFloat(document.getElementById('basicSalary').value),
+                    hra: 0,
+                    transportAllowance: 0,
+                    medicalAllowance: 0,
+                    otherAllowances: 0,
+                    pfDeduction: 0,
+                    taxDeduction: 0,
+                    otherDeductions: 0,
+                    effectiveFrom: document.getElementById('effectiveFrom').value
+                };
+
+                try {
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Saving...';
+
+                    let response;
+                    if (currentPayrollId) {
+                        response = await api.put(`/payroll/${currentPayrollId}`, payrollData);
+                    } else {
+                        response = await api.post('/payroll', payrollData);
+                    }
+
+                    if (response.success) {
+                        ui.showSuccess(currentPayrollId ? 'Salary updated successfully!' : 'Salary created successfully!');
+                        closeManagePayrollModal();
+                        await loadAdminPayroll();
+                    } else {
+                        throw new Error(response.message || 'Failed to save salary');
+                    }
+                } catch (error) {
+                    ui.showError(error.message);
+                } finally {
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Save Salary';
+                }
+            });
+
+            // Generate Slip Form
+            document.getElementById('generateSlipForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const slipData = {
+                    employeeId: parseInt(document.getElementById('slipEmployee').value),
+                    month: parseInt(document.getElementById('slipMonth').value),
+                    year: parseInt(document.getElementById('slipYear').value)
+                };
+
+                try {
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Generating...';
+
+                    const response = await api.post('/payroll/generate-slip', slipData);
+
+                    if (response.success) {
+                        ui.showSuccess('Salary slip generated successfully!');
+                        closeGenerateSlipModal();
+                        await loadSalarySlips();
+                    } else {
+                        throw new Error(response.message || 'Failed to generate salary slip');
+                    }
+                } catch (error) {
+                    ui.showError(error.message);
+                } finally {
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Generate Slip';
+                }
+            });
+        });
+
+        async function loadSalarySlips() {
+            try {
+                const response = await api.get('/payroll/slips');
+                const container = document.getElementById('salarySlips');
+
+                if (response.success && response.data.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        ${auth.isAdmin() ? '<th>Employee</th>' : ''}
+                                        <th>Month</th>
+                                        <th>Year</th>
+                                        <th>Working Days</th>
+                                        <th>Present Days</th>
+                                        <th>Leaves</th>
+                                        <th>Gross Salary</th>
+                                        <th>Net Salary</th>
+                                        <th>Generated</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${response.data.map(slip => `
+                                        <tr>
+                                            ${auth.isAdmin() ? `<td>${slip.first_name} ${slip.last_name}</td>` : ''}
+                                            <td>${new Date(slip.year, slip.month - 1).toLocaleDateString('en-US', { month: 'long' })}</td>
+                                            <td>${slip.year}</td>
+                                            <td>${slip.working_days}</td>
+                                            <td>${slip.present_days}</td>
+                                            <td>${slip.leaves_taken || 0}</td>
+                                            <td>${ui.formatCurrency(slip.gross_salary)}</td>
+                                            <td style="font-weight: bold;">${ui.formatCurrency(slip.net_salary)}</td>
+                                            <td>${ui.formatDate(slip.generated_at)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No salary slips available yet.</p>';
+                }
+            } catch (error) {
+                console.error('Load salary slips error:', error);
+                document.getElementById('salarySlips').innerHTML = '<p class="alert alert-error">Failed to load salary slips</p>';
+            }
+        }
+    </script>
+</body>
+</html>

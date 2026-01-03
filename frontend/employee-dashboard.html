@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Dashboard - Dayflow HRMS</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="navbar"></div>
+
+    <div class="container">
+        <h1 class="mb-3">Employee Dashboard</h1>
+        <p id="welcomeMessage" style="color: var(--secondary-color); margin-bottom: 2rem;">Welcome back!</p>
+
+        <!-- Quick Actions -->
+        <div class="card-grid">
+            <div class="stat-card" onclick="window.location.href='./profile.html'">
+                <div class="stat-card-icon">👤</div>
+                <div class="stat-card-title">My Profile</div>
+                <div class="stat-card-value" id="profileStatus">View</div>
+            </div>
+
+            <div class="stat-card" onclick="window.location.href='./attendance.html'">
+                <div class="stat-card-icon" style="background: var(--success-color);">📅</div>
+                <div class="stat-card-title">Attendance</div>
+                <div class="stat-card-value" id="attendanceStatus">-</div>
+            </div>
+
+            <div class="stat-card" onclick="window.location.href='./leave.html'">
+                <div class="stat-card-icon" style="background: var(--warning-color);">🏖️</div>
+                <div class="stat-card-title">Leave Balance</div>
+                <div class="stat-card-value" id="leaveBalance">-</div>
+            </div>
+
+            <div class="stat-card" onclick="window.location.href='./payroll.html'">
+                <div class="stat-card-icon" style="background: var(--danger-color);">💰</div>
+                <div class="stat-card-title">Payroll</div>
+                <div class="stat-card-value" id="salaryInfo">View</div>
+            </div>
+        </div>
+
+        <!-- Today's Attendance -->
+        <div class="card" style="margin-top: 3rem;">
+            <div class="flex-between mb-3">
+                <h2 class="card-header">Today's Attendance</h2>
+                <div id="todayDate"></div>
+            </div>
+            <div id="todayAttendance">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Recent Leave Requests -->
+        <div class="card">
+            <h2 class="card-header">Recent Leave Requests</h2>
+            <div id="recentLeaves">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <!-- Recent Attendance -->
+        <div class="card">
+            <h2 class="card-header">Recent Attendance (Last 7 Days)</h2>
+            <div id="recentAttendance">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+    <script>
+        let employeeId = null;
+
+        async function loadDashboard() {
+            try {
+                const user = auth.getUser();
+                document.getElementById('welcomeMessage').textContent = `Welcome back, ${user.name}!`;
+                
+                // Set today's date
+                const today = new Date();
+                document.getElementById('todayDate').textContent = ui.formatDate(today);
+
+                // Load employee profile
+                const profileResponse = await api.get('/employees/profile/me');
+                if (profileResponse.success) {
+                    employeeId = profileResponse.data.id;
+                    loadTodayAttendance();
+                    loadLeaveBalance();
+                    loadRecentLeaves();
+                    loadRecentAttendance();
+                }
+            } catch (error) {
+                console.error('Dashboard load error:', error);
+                ui.showError('Failed to load dashboard');
+            }
+        }
+
+        async function loadTodayAttendance() {
+            try {
+                const response = await api.get('/attendance/today');
+                const container = document.getElementById('todayAttendance');
+
+                if (response.success && response.data) {
+                    const attendance = response.data;
+                    const statusBadge = `<span class="badge ${ui.getBadgeClass(attendance.status)}">${attendance.status.replace('_', ' ').toUpperCase()}</span>`;
+                    
+                    container.innerHTML = `
+                        <div class="flex-between">
+                            <div>
+                                <p><strong>Status:</strong> ${statusBadge}</p>
+                                ${attendance.check_in_time ? `<p><strong>Check In:</strong> ${ui.formatTime(attendance.check_in_time)}</p>` : ''}
+                                ${attendance.check_out_time ? `<p><strong>Check Out:</strong> ${ui.formatTime(attendance.check_out_time)}</p>` : ''}
+                                ${attendance.working_hours ? `<p><strong>Working Hours:</strong> ${attendance.working_hours} hrs</p>` : ''}
+                            </div>
+                            <div class="flex gap-2">
+                                ${!attendance.check_in_time ? `<button class="btn btn-success" onclick="checkIn()">Check In</button>` : ''}
+                                ${attendance.check_in_time && !attendance.check_out_time ? `<button class="btn btn-danger" onclick="checkOut()">Check Out</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('attendanceStatus').textContent = attendance.check_in_time ? 'Present' : 'Not Checked In';
+                } else {
+                    container.innerHTML = `
+                        <div class="flex-between">
+                            <p>You haven't checked in yet today.</p>
+                            <button class="btn btn-success" onclick="checkIn()">Check In</button>
+                        </div>
+                    `;
+                    document.getElementById('attendanceStatus').textContent = 'Not Checked In';
+                }
+            } catch (error) {
+                console.error('Load attendance error:', error);
+                document.getElementById('todayAttendance').innerHTML = '<p class="alert alert-error">Failed to load attendance</p>';
+            }
+        }
+
+        async function checkIn() {
+            try {
+                const response = await api.post('/attendance/checkin', {});
+                if (response.success) {
+                    ui.showSuccess('Checked in successfully!');
+                    loadTodayAttendance();
+                }
+            } catch (error) {
+                ui.showError(error.message);
+            }
+        }
+
+        async function checkOut() {
+            try {
+                const response = await api.post('/attendance/checkout', {});
+                if (response.success) {
+                    ui.showSuccess(`Checked out successfully! Working hours: ${response.workingHours} hrs`);
+                    loadTodayAttendance();
+                }
+            } catch (error) {
+                ui.showError(error.message);
+            }
+        }
+
+        async function loadLeaveBalance() {
+            try {
+                const response = await api.get('/leave/balance');
+                if (response.success && response.data.length > 0) {
+                    const totalRemaining = response.data.reduce((sum, item) => sum + item.remaining_leaves, 0);
+                    document.getElementById('leaveBalance').textContent = totalRemaining;
+                }
+            } catch (error) {
+                console.error('Load leave balance error:', error);
+            }
+        }
+
+        async function loadRecentLeaves() {
+            try {
+                const response = await api.get('/leave?');
+                const container = document.getElementById('recentLeaves');
+
+                if (response.success && response.data.length > 0) {
+                    const recent = response.data.slice(0, 5);
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Days</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${recent.map(leave => `
+                                        <tr>
+                                            <td>${leave.leave_type.toUpperCase()}</td>
+                                            <td>${ui.formatDate(leave.start_date)}</td>
+                                            <td>${ui.formatDate(leave.end_date)}</td>
+                                            <td>${leave.total_days}</td>
+                                            <td><span class="badge ${ui.getBadgeClass(leave.status)}">${leave.status.toUpperCase()}</span></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No leave requests found.</p>';
+                }
+            } catch (error) {
+                console.error('Load recent leaves error:', error);
+                document.getElementById('recentLeaves').innerHTML = '<p class="alert alert-error">Failed to load leave requests</p>';
+            }
+        }
+
+        async function loadRecentAttendance() {
+            try {
+                const endDate = new Date();
+                const startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7);
+
+                const response = await api.get(`/attendance?startDate=${startDate.toISOString().split('T')[0]}&endDate=${endDate.toISOString().split('T')[0]}`);
+                const container = document.getElementById('recentAttendance');
+
+                if (response.success && response.data.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Check In</th>
+                                        <th>Check Out</th>
+                                        <th>Working Hours</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${response.data.map(att => `
+                                        <tr>
+                                            <td>${ui.formatDate(att.attendance_date)}</td>
+                                            <td>${ui.formatTime(att.check_in_time)}</td>
+                                            <td>${ui.formatTime(att.check_out_time)}</td>
+                                            <td>${att.working_hours ? att.working_hours + ' hrs' : '-'}</td>
+                                            <td><span class="badge ${ui.getBadgeClass(att.status)}">${att.status.replace('_', ' ').toUpperCase()}</span></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No attendance records found.</p>';
+                }
+            } catch (error) {
+                console.error('Load recent attendance error:', error);
+                document.getElementById('recentAttendance').innerHTML = '<p class="alert alert-error">Failed to load attendance</p>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+    </script>
+</body>
+</html>

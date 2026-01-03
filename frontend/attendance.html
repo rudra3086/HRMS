@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance - Dayflow HRMS</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="navbar"></div>
+
+    <div class="container">
+        <div class="flex-between mb-3">
+            <h1>Attendance Management</h1>
+            <div id="adminButtons" style="display: none;">
+                <button class="btn btn-primary" onclick="openMarkAttendanceModal()">✓ Mark Attendance</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="flex-between mb-3">
+                <h2 class="card-header">Filters</h2>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div class="form-group" id="employeeFilterGroup" style="display: none;">
+                    <label class="form-label">Employee</label>
+                    <select id="employeeFilter" class="form-select">
+                        <option value="">All Employees</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" id="startDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">End Date</label>
+                    <input type="date" id="endDate" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary btn-full" onclick="loadAttendance()">Search</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 class="card-header">Attendance Records</h2>
+            <div id="attendanceRecords">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mark Attendance Modal (Admin Only) -->
+    <div id="markAttendanceModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeMarkAttendanceModal()">&times;</span>
+            <h2 class="modal-header">✓ Mark Attendance</h2>
+            <form id="markAttendanceForm">
+                <div class="form-group">
+                    <label class="form-label" for="attendanceEmployee">Employee *</label>
+                    <select id="attendanceEmployee" class="form-select" required>
+                        <option value="">-- Select Employee --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="attendanceDate">Date *</label>
+                    <input type="date" id="attendanceDate" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="attendanceStatus">Status *</label>
+                    <select id="attendanceStatus" class="form-select" required onchange="toggleTimeFields()">
+                        <option value="present">Present</option>
+                        <option value="absent">Absent</option>
+                        <option value="half_day">Half Day</option>
+                        <option value="leave">Leave</option>
+                    </select>
+                </div>
+
+                <div id="timeFields">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label" for="checkInTime">Check In Time</label>
+                            <input type="time" id="checkInTime" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="checkOutTime">Check Out Time</label>
+                            <input type="time" id="checkOutTime" class="form-input">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="attendanceRemarks">Remarks</label>
+                    <textarea id="attendanceRemarks" class="form-textarea" rows="3" placeholder="Optional notes"></textarea>
+                </div>
+
+                <div class="flex gap-2 mt-3">
+                    <button type="submit" class="btn btn-success btn-full">Mark Attendance</button>
+                    <button type="button" class="btn btn-secondary btn-full" onclick="closeMarkAttendanceModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+    <script>
+        let allEmployees = [];
+
+        async function loadEmployees() {
+            if (!auth.isAdmin()) return;
+
+            try {
+                const response = await api.get('/employees');
+                if (response.success) {
+                    allEmployees = response.data;
+                    
+                    // Populate employee dropdowns
+                    const attendanceEmployee = document.getElementById('attendanceEmployee');
+                    const employeeFilter = document.getElementById('employeeFilter');
+                    
+                    allEmployees.forEach(emp => {
+                        const option1 = new Option(`${emp.first_name} ${emp.last_name} (${emp.employee_id})`, emp.id);
+                        const option2 = new Option(`${emp.first_name} ${emp.last_name} (${emp.employee_id})`, emp.id);
+                        attendanceEmployee.add(option1);
+                        employeeFilter.add(option2);
+                    });
+                }
+            } catch (error) {
+                console.error('Load employees error:', error);
+            }
+        }
+
+        function openMarkAttendanceModal() {
+            document.getElementById('markAttendanceModal').classList.add('active');
+            document.getElementById('attendanceDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('checkInTime').value = '09:00';
+            document.getElementById('checkOutTime').value = '18:00';
+        }
+
+        function closeMarkAttendanceModal() {
+            document.getElementById('markAttendanceModal').classList.remove('active');
+            document.getElementById('markAttendanceForm').reset();
+        }
+
+        function toggleTimeFields() {
+            const status = document.getElementById('attendanceStatus').value;
+            const timeFields = document.getElementById('timeFields');
+            
+            if (status === 'absent' || status === 'leave') {
+                timeFields.style.display = 'none';
+                document.getElementById('checkInTime').value = '';
+                document.getElementById('checkOutTime').value = '';
+            } else {
+                timeFields.style.display = 'block';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Show admin features if admin
+            if (auth.isAdmin()) {
+                document.getElementById('adminButtons').style.display = 'flex';
+                document.getElementById('employeeFilterGroup').style.display = 'block';
+                await loadEmployees();
+            }
+
+            // Set default dates (last 30 days)
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - 30);
+
+            document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+            document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
+
+            loadAttendance();
+
+            // Mark Attendance Form
+            document.getElementById('markAttendanceForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const employeeId = document.getElementById('attendanceEmployee').value;
+                const date = document.getElementById('attendanceDate').value;
+                const status = document.getElementById('attendanceStatus').value;
+                const checkIn = document.getElementById('checkInTime').value;
+                const checkOut = document.getElementById('checkOutTime').value;
+                const remarks = document.getElementById('attendanceRemarks').value;
+
+                const attendanceData = {
+                    employeeId: parseInt(employeeId),
+                    date: date,
+                    status: status,
+                    remarks: remarks || null
+                };
+
+                // Add times if status is present or half_day
+                if (status === 'present' || status === 'half_day') {
+                    if (!checkIn || !checkOut) {
+                        ui.showError('Please provide check-in and check-out times for present/half-day status');
+                        return;
+                    }
+                    attendanceData.checkInTime = `${date}T${checkIn}:00`;
+                    attendanceData.checkOutTime = `${date}T${checkOut}:00`;
+                }
+
+                try {
+                    const submitBtn = e.target.querySelector('button[type=\"submit\"]');
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Marking...';
+
+                    const response = await api.post('/attendance', attendanceData);
+
+                    if (response.success) {
+                        ui.showSuccess('Attendance marked successfully!');
+                        closeMarkAttendanceModal();
+                        await loadAttendance();
+                    } else {
+                        throw new Error(response.message || 'Failed to mark attendance');
+                    }
+                } catch (error) {
+                    ui.showError(error.message);
+                } finally {
+                    const submitBtn = e.target.querySelector('button[type=\"submit\"]');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Mark Attendance';
+                }
+            });
+        });
+        async function loadAttendance() {
+            try {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const employeeFilter = document.getElementById('employeeFilter')?.value;
+
+                let url = '/attendance?';
+                if (startDate) url += `startDate=${startDate}&`;
+                if (endDate) url += `endDate=${endDate}&`;
+                if (employeeFilter && auth.isAdmin()) url += `employeeId=${employeeFilter}&`;
+
+                const response = await api.get(url);
+                const container = document.getElementById('attendanceRecords');
+
+                if (response.success && response.data.length > 0) {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        ${auth.isAdmin() ? '<th>Employee</th>' : ''}
+                                        <th>Date</th>
+                                        <th>Check In</th>
+                                        <th>Check Out</th>
+                                        <th>Working Hours</th>
+                                        <th>Status</th>
+                                        <th>Remarks</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${response.data.map(att => `
+                                        <tr>
+                                            ${auth.isAdmin() ? `<td>${att.first_name} ${att.last_name}</td>` : ''}
+                                            <td>${ui.formatDate(att.attendance_date)}</td>
+                                            <td>${att.check_in_time ? ui.formatTime(att.check_in_time) : '-'}</td>
+                                            <td>${att.check_out_time ? ui.formatTime(att.check_out_time) : '-'}</td>
+                                            <td>${att.working_hours ? att.working_hours + ' hrs' : '-'}</td>
+                                            <td><span class="badge ${ui.getBadgeClass(att.status)}">${att.status.replace('_', ' ').toUpperCase()}</span></td>
+                                            <td>${att.remarks || '-'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">No attendance records found.</p>';
+                }
+            } catch (error) {
+                console.error('Load attendance error:', error);
+                ui.showError('Failed to load attendance records');
+            }
+        }
+    </script>
+</body>
+</html>

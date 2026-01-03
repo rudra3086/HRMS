@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Dayflow HRMS</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="navbar"></div>
+
+    <div class="container">
+        <div class="flex-between mb-3">
+            <h1>Employee Profile</h1>
+            <button id="editBtn" class="btn btn-primary" onclick="toggleEdit()">Edit Profile</button>
+        </div>
+
+        <div id="profileContent">
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+    <script>
+        let isEditMode = false;
+        let employeeData = null;
+        let employeeId = null;
+
+        async function loadProfile() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const paramId = urlParams.get('id');
+                
+                const isAdmin = auth.isAdmin();
+                
+                if (paramId && isAdmin) {
+                    employeeId = paramId;
+                    const response = await api.get(`/employees/${paramId}`);
+                    if (response.success) {
+                        employeeData = response.data;
+                        displayProfile();
+                    }
+                } else {
+                    const response = await api.get('/employees/profile/me');
+                    if (response.success) {
+                        employeeData = response.data;
+                        employeeId = employeeData.id;
+                        displayProfile();
+                    }
+                }
+            } catch (error) {
+                console.error('Load profile error:', error);
+                ui.showError('Failed to load profile');
+            }
+        }
+
+        function displayProfile() {
+            const container = document.getElementById('profileContent');
+            const isAdmin = auth.isAdmin();
+            const profilePicture = employeeData.profile_picture || null;
+            
+            container.innerHTML = `
+                <div class="card">
+                    <h2 class="card-header">Profile Picture</h2>
+                    <div style="display: flex; align-items: center; gap: 2rem;">
+                        <div class="profile-picture-container">
+                            <img id="profilePicturePreview" 
+                                 src="${profilePicture || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22150%22 height=%22150%22%3E%3Crect fill=%22%23e2e8f0%22 width=%22150%22 height=%22150%22/%3E%3Ctext fill=%22%236366f1%22 font-size=%2260%22 font-weight=%22bold%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22%3E${employeeData.first_name.charAt(0)}${employeeData.last_name.charAt(0)}%3C/text%3E%3C/svg%3E'}" 
+                                 alt="Profile Picture" 
+                                 class="profile-picture">
+                        </div>
+                        <div>
+                            <p style="color: var(--light-text); margin-bottom: 1rem;">Upload a profile picture (optional)</p>
+                            <input type="file" id="profilePictureInput" accept="image/*" class="hidden" onchange="handleProfilePictureChange(event)">
+                            <div class="flex gap-2">
+                                <button class="btn btn-primary" onclick="document.getElementById('profilePictureInput').click()">Choose Photo</button>
+                                ${profilePicture ? '<button class="btn btn-secondary" onclick="removeProfilePicture()">Remove Photo</button>' : ''}
+                            </div>
+                            <p style="color: var(--light-text); font-size: 0.85rem; margin-top: 0.5rem;">Supported formats: JPG, PNG, GIF. Max size: 2MB</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-header">Personal Information</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+                        <div>
+                            <p><strong>Employee ID:</strong></p>
+                            <p>${employeeData.employee_id}</p>
+                        </div>
+                        <div>
+                            <p><strong>Full Name:</strong></p>
+                            <p id="view-name">${employeeData.first_name} ${employeeData.last_name}</p>
+                            <div id="edit-name" class="hidden">
+                                <input type="text" id="firstName" class="form-input mb-1" value="${employeeData.first_name}" placeholder="First Name">
+                                <input type="text" id="lastName" class="form-input" value="${employeeData.last_name}" placeholder="Last Name">
+                            </div>
+                        </div>
+                        <div>
+                            <p><strong>Email:</strong></p>
+                            <p>${employeeData.email}</p>
+                        </div>
+                        <div>
+                            <p><strong>Phone:</strong></p>
+                            <p id="view-phone">${employeeData.phone || 'Not provided'}</p>
+                            <input type="text" id="edit-phone" class="form-input hidden" value="${employeeData.phone || ''}" placeholder="Phone Number">
+                        </div>
+                        <div>
+                            <p><strong>Date of Birth:</strong></p>
+                            <p id="view-dob">${ui.formatDate(employeeData.date_of_birth)}</p>
+                            <input type="date" id="edit-dob" class="form-input hidden" value="${employeeData.date_of_birth ? employeeData.date_of_birth.split('T')[0] : ''}">
+                        </div>
+                        <div>
+                            <p><strong>Address:</strong></p>
+                            <p id="view-address">${employeeData.address || 'Not provided'}</p>
+                            <textarea id="edit-address" class="form-textarea hidden" rows="2">${employeeData.address || ''}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-header">Employment Details</h2>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+                        <div>
+                            <p><strong>Department:</strong></p>
+                            <p id="view-department">${employeeData.department || '-'}</p>
+                            <input type="text" id="edit-department" class="form-input hidden" value="${employeeData.department || ''}" ${!isAdmin ? 'disabled' : ''}>
+                        </div>
+                        <div>
+                            <p><strong>Designation:</strong></p>
+                            <p id="view-designation">${employeeData.designation || '-'}</p>
+                            <input type="text" id="edit-designation" class="form-input hidden" value="${employeeData.designation || ''}" ${!isAdmin ? 'disabled' : ''}>
+                        </div>
+                        <div>
+                            <p><strong>Date of Joining:</strong></p>
+                            <p>${ui.formatDate(employeeData.date_of_joining)}</p>
+                        </div>
+                        <div>
+                            <p><strong>Employment Status:</strong></p>
+                            <p><span class="badge ${ui.getBadgeClass(employeeData.employment_status)}">${employeeData.employment_status.toUpperCase()}</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="saveButtons" class="hidden mt-3">
+                    <button class="btn btn-success" onclick="saveProfile()">Save Changes</button>
+                    <button class="btn btn-secondary" onclick="cancelEdit()">Cancel</button>
+                </div>
+            `;
+        }
+
+        function toggleEdit() {
+            isEditMode = !isEditMode;
+            
+            if (isEditMode) {
+                // Show edit fields
+                document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+                document.querySelectorAll('[id^="edit-"]').forEach(el => el.classList.remove('hidden'));
+                document.getElementById('saveButtons').classList.remove('hidden');
+                document.getElementById('editBtn').textContent = 'Cancel';
+            } else {
+                cancelEdit();
+            }
+        }
+
+        function cancelEdit() {
+            isEditMode = false;
+            document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.remove('hidden'));
+            document.querySelectorAll('[id^="edit-"]').forEach(el => el.classList.add('hidden'));
+            document.getElementById('saveButtons').classList.add('hidden');
+            document.getElementById('editBtn').textContent = 'Edit Profile';
+        }
+
+        async function saveProfile() {
+            try {
+                const isAdmin = auth.isAdmin();
+                
+                const updateData = {
+                    phone: document.getElementById('edit-phone').value,
+                    address: document.getElementById('edit-address').value
+                };
+
+                if (isAdmin) {
+                    updateData.firstName = document.getElementById('firstName').value;
+                    updateData.lastName = document.getElementById('lastName').value;
+                    updateData.dateOfBirth = document.getElementById('edit-dob').value;
+                    updateData.department = document.getElementById('edit-department').value;
+                    updateData.designation = document.getElementById('edit-designation').value;
+                }
+
+                const response = await api.put(`/employees/${employeeId}`, updateData);
+
+                if (response.success) {
+                    ui.showSuccess('Profile updated successfully');
+                    cancelEdit();
+                    loadProfile();
+                }
+            } catch (error) {
+                ui.showError(error.message);
+            }
+        }
+
+        // Profile Picture Functions
+        function handleProfilePictureChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+            if (!validTypes.includes(file.type)) {
+                ui.showError('Please upload a valid image file (JPG, PNG, or GIF)');
+                return;
+            }
+
+            // Validate file size (2MB max)
+            const maxSize = 2 * 1024 * 1024; // 2MB in bytes
+            if (file.size > maxSize) {
+                ui.showError('File size must be less than 2MB');
+                return;
+            }
+
+            // Read and preview the file
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const base64Image = e.target.result;
+                
+                // Update preview
+                document.getElementById('profilePicturePreview').src = base64Image;
+                
+                // Upload to server
+                await uploadProfilePicture(base64Image);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function uploadProfilePicture(base64Image) {
+            try {
+                console.log('Uploading profile picture for employee ID:', employeeId);
+                console.log('Image size:', base64Image.length, 'bytes');
+                
+                const response = await api.put(`/employees/${employeeId}`, {
+                    profilePicture: base64Image
+                });
+
+                console.log('Upload response:', response);
+
+                if (response.success) {
+                    ui.showSuccess('Profile picture updated successfully');
+                    employeeData.profile_picture = base64Image;
+                    displayProfile();
+                } else {
+                    throw new Error(response.message || 'Failed to upload profile picture');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                console.error('Error details:', error.response || error);
+                ui.showError(error.message || 'Failed to upload profile picture. Check console for details.');
+                // Reset the preview
+                loadProfile();
+            }
+        }
+
+        async function removeProfilePicture() {
+            if (!confirm('Are you sure you want to remove your profile picture?')) {
+                return;
+            }
+
+            try {
+                console.log('Removing profile picture for employee ID:', employeeId);
+                const response = await api.put(`/employees/${employeeId}`, {
+                    profilePicture: null
+                });
+
+                if (response.success) {
+                    ui.showSuccess('Profile picture removed successfully');
+                    employeeData.profile_picture = null;
+                    displayProfile();
+                } else {
+                    throw new Error(response.message || 'Failed to remove profile picture');
+                }
+            } catch (error) {
+                console.error('Remove error:', error);
+                ui.showError(error.message || 'Failed to remove profile picture');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadProfile);
+    </script>
+</body>
+</html>
